@@ -11,37 +11,59 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Final Project
 
-```{r, echo=FALSE}
-author <- function(){
-  c('Annie Yang', 'Fuyu Zou', 'Weiqi Pan', 'Lisha Wang')
-}
-```
 
 ***
 ## 1 Introduction
+
+The NYC Taxis are widely recognozied as icons of the city because New York city is a compact city with large population, and driving is expensive and time-consuming there. Although the public transportation is extensive and complete in NYC, the stations are fixed which may be far away from passengers' points of departure and destinations. Hence, it is convenient and economical for people to travel by taxi in NYC.
+
+With the development of technology, people start to call taxi on mobile apps like Uber instead of calling the taxi service over phone. One of the most important reason is that customers can see the estimated trip durations and expenses instantly on the app after inputing pickup time and locations, and destinations. To improve the competance of their apps in the market, taxi companies concentrate on increasing the accuracy of estimated trip duration and expense. The trip duration is essential because expense is produced based on duration and distance, and distance between two locations on the same route is unchanged. 
+
+As a result, we decide to choose the NYC Taxi Trip Duration competition on Kaggle as our final project because the data is from the real world, and the predictions are useful and meaningful. 
+
+As the data is published on Kaggle, there are some previous discussions and kernals on the website. We take these valuable work as references. 
 
 ### 1.1 Import packages
 ```{r}
 library(data.table)
 library(ggplot2)
-library(leaflet)
 library(dplyr)
 library(Rmisc)
 library(plotly)
 library(tidyverse)
-
-
+library(geosphere)
+library(knitr)
 ```
 
 
-## 1.2 Load data
+### 1.2 Load data
 The datasets are published on Kaggle by the NYC Taxi and Limousine Commission. There are 1,458,644 observations in the train dataset and 625,134 observations in the test dataset. The train dataset includes 11 variables such as id, vendor_id and so on. Two variables, dropoff_datetime and trip_duration which show up in the train dataset are withheld in the test dataset. Our goal is to predict the trip durations.
+
+
 ```{r}
 train = fread('train_taxi.csv')
 test = fread('test_taxi.csv')
 ```
 
 ## 1.3 File structure and content
+
+The discription of the variables is as below:
+
+Variables          | Description
+------------------ | ---------------------------------------
+id                 | a unique identifier for each trip
+vendor_id          | a code indicating the provider associated with the trip record; only takes value 1 and 2
+pickup_datetime    | date and time when the meter was engaged
+dropoff_datetime   | date and time when the meter was disengaged
+passenger_count    | the number of passengers in the vehicle (driver entered value)
+pickup_longitude   | the longitude where the meter was engaged
+pickup_latitude    | the latitude where the meter was engaged
+dropoff_longitude  | the longitude where the meter was disengaged
+dropoff_latitude   | the latitude where the meter was disengaged
+store_and_fwd_flag | This flag indicates whether the trip record was held in vehicle memory before sending to the vendor because the vehicle did not have a connection to the server - Y=store and forward; N=not a store and forward trip
+trip_duration      | duration of the trip in seconds
+
+
 ```{r}
 summary(train)
 str(train)
@@ -50,17 +72,17 @@ summary(test)
 str(test)
 ```
 
-We find:
+After looking at the summary and structure of the data, we found:
 
-*vender_id* only takes value 1 and 2, we assume it represents two taxi company.
-*pickup_datetime* and *dropoff_datetime* are both the combination of date and time, which need to be reformated into sperate variables
-*pickup_latitude* and *dropoff_latitude* are not restricted in the New York border (latitude: 40.3371 ~ 41.05555, longitute: -74.4640~-73.4944) as well as *pickup_longitude* and *dropoff_longitude* 
-*store_and_fwd_flag* takes two character as 'N' or 'Y'
-*trip_duration* which is our target variable, has some extreme value: the min value is 1 second and the maximum value 3526282 second $\approx$ 4 days, which are unbelievable.
+* *vender_id* only takes value 1 and 2, we assume it represents two taxi company.
+* *pickup_datetime* and *dropoff_datetime* are both the combination of date and time, which need to be reformated into sperate variables
+* *pickup_latitude* and *dropoff_latitude* are not restricted in the New York border (latitude: 40.3371 ~ 41.05555, longitute: -74.4640~-73.4944) as well as *pickup_longitude* and *dropoff_longitude* 
+* *store_and_fwd_flag* takes two character as 'N' or 'Y'
+* *trip_duration* which is our target variable, has some extreme value: the min value is 1 second and the maximum value 3526282 seconds $\approx$ 4 days, which are unreliable.
 
 ## 1.4 missing values
 
-Missing value is a vital part in prediction. If there exists missing value in the dataset, we need to imputate the missing point in order to avoid building model on a small sample. Fortunately, our datasets do not contain any missing value.
+Missing value is a vital part in the prediction. If there exists missing value in the dataset, we need to properly handle the missing points in order to avoid building model on a small sample and drawing an inaccurate inference about the data. Fortunately, our datasets do not contain any missing value.
 
 ```{r}
 sum(is.na(train))
@@ -70,9 +92,10 @@ sum(is.na(test))
 
 # 2 Individual feature visualisations
 
+## 2.1 General pattern
 In this section we will begin by having a look at the distributions of the individual data features.
 
-We start with a map of the pick-up locations of the taxis. The density of the green color shows the frequency of the pick-up coordinates. In this map you can zoom and pan through the pickup locations. 
+We start with a map of the pick-up locations of the taxis. The density of the green color shows the frequency of the pick-up coordinates. In this map you can zoom and pan through the pickup locations. In addition, we marked the coordinates of 
 
 It is clealy shown on the plot that most pick-up coordinates are whithin Manhattan area. Another two notable hot-spots are LGA and JFK airport towards the south-east of the city.
 ```{r}
@@ -80,19 +103,29 @@ set.seed(1234)
 ## select a sample of 8000
 foo <- sample_n(train, 8e3)
 
+fk_coord <- data.frame(lon = -73.778889, lat = 40.639722, name = 'JFK Airport')
+la_guardia_coord <- data.frame(lon = -73.872611, lat = 40.77725,name = 'LGA Airport')
+train_coord <- data.frame(lon = -73.993584, lat = 40.750580, name = 'train station')
+bus_coord <- data.frame(lon = -73.9903, lat = 40.7569,name = 'bus station')
+
+hot_location = data.frame(rbind(fk_coord,la_guardia_coord,train_coord,bus_coord))
+
+Sys.setenv('MAPBOX_TOKEN' = 'pk.eyJ1IjoiZmZmcmV5YSIsImEiOiJjamg1ZGFrMzIwMHc4MnZwbGU0bDNnaHBlIn0.DFNaPWfAO2wa9wZUNfzLYQ')
 
 foo %>%
   plot_mapbox(lat = ~pickup_latitude, lon = ~pickup_longitude,
               mode = 'scattermapbox', hoverinfo='speed') %>%
   add_markers(alpha = 0.3, size= I(4), color = I('#32CD32')) %>%
+  #add_markers(lat = ~hot_location$lat, lon=~hot_location$lon, text = ~hot_location$name) %>%
   layout(mapbox = list(style = 'light',
                        zoom = 9,
                        center = list(lat = ~median(pickup_latitude),
                                      lon = ~median(pickup_longitude))))
 
+
 ```
 
-This map shows the drop-off locations. Similar with the pick-up map, most of the cordinates are within Mahattan area,JFK airport and LGA airport,but the locations are more dispersed outside the manhattan area, and more points are located outside the New York city border.
+This map shows the drop-off locations. Similar with the pick-up map, most of the cordinates are within Mahattan area,JFK airport and LGA airport,but the disengaged locations are more dispersed outside the manhattan area, and more points are located outside the New York city border.
 
 ```{r}
 foo %>%
@@ -104,40 +137,50 @@ foo %>%
                        center = list(lat = ~median(pickup_latitude),
                                      lon = ~median(pickup_longitude))))
 ```
-On this map, we draw the pickup locations of the two vendors, with orange represents vendor 2 and blue represents verdor 1.
 
-Generally, the two vendors do not have clear their own pick-up location preferences.
-```{r}
-foo %>%
-  plot_mapbox(lat = ~pickup_latitude, lon = ~pickup_longitude, split = ~vendor_id,
-              mode = 'scattermapbox', hoverinfo='vendor_id', text =~vendor_id) %>%
-  add_markers(alpha = 0.3, size= I(4)) %>%
-  layout(mapbox = list(style = 'light',
-                       zoom = 9,
-                       center = list(lat = ~median(pickup_latitude),
-                                     lon = ~median(pickup_longitude))))
-```
 
-Now, let's look at the distribution of log10(trip_duration). Note that the y-axis is sqrt of count.
+Now, let's look at the distribution of log10(*trip_duration*). Note that the y-axis is sqrt of count. By drawing the histogram of the trip_duration, we find:
 
 * The majority of rides follow a rather smooth distribution that looks almost log-normal with a peak just short of 1000 seconds, i.e. about 17 minutes.
+
 * There are several suspiciously short rides with less than 10 seconds duration.
-* Additionally, there is a strange delta-shaped peak of trip_duration just before the 1e5 seconds mark and even a few way above it:
+
+* Additionally, there is a strange delta-shaped peak of trip_duration just around 86400 seconds(a day) mark and even a few way above it. We sorted the *trip_duration* in descending order, and found that the maximum of *trip_duration* is 3526282 (approximately 40 days), which is fairly unbelivable, Therefore, these trip_durations that are way longer than a day can be considered as extreme value.
 
 ```{r}
-
 g1 = train %>%
   ggplot(aes(trip_duration)) +
   geom_histogram(bins = 150, fill = 'black', color = 'white') +
+  geom_vline(xintercept = 24*3600, size = 0.3, color = 'red') +
   scale_x_log10() +
   scale_y_sqrt() +
+  ggtitle('the distribution of log10(trip_duration)') +
   theme_bw()
 
-ggplotly(g1)
+a <- list(
+  x = 6.3,
+  y = 3,
+  text = 'extreme values',
+  xref = "x",
+  yref = "y",
+  showarrow = TRUE,
+  arrowhead = 1,
+  ax = 20,
+  ay = -40
+)
+ggplotly(g1) %>%
+  layout(annotations = a)
+
+knitr::kable(head(sort(train$trip_duration, decreasing = T)))
 ```
 
+In order to check whether the distribution of pick-up date and drop-off date vary (presumably their distribution should look the same), we draw the following plot. We find:
 
-The distribution of pick-up date and drop-off date
+* Both the pick-up date and drop-off date start from Jan,1st and ends at Jun 30th. In general, their distribution do not vary much.
+
+* There is an interesting drop around Jan, 24th, when NY was in the Winter. We guess there might be something to do with the stalled transportation caused by snow storm. 
+
+* There is also a drop around June, 1st. To explore the reasons of these drops, we might need to involve other related datasets.
 
 ```{r}
 ###### split date and time 
@@ -160,11 +203,218 @@ train_s = data.frame(cbind(train,pick_up,drop_off)) %>%
 p1 = plot_ly(train_s, x = ~ pickup_date)  %>% add_histogram(name = "pick_up date")  
 p2 = plot_ly(train_s, x = ~ dropoff_date)  %>% add_histogram(name = "drop_off date")  
 
-subplot(p1,p2, nrows = 2, shareX = T,titleX = F )
+subplot(p1,p2, nrows = 2, shareX = T,titleX = F ) %>%
+  layout(title = 'The distribution of pick-up date and drop-off date')
 
 ```
 
-Speed.
+## 2.2 Feature Relations
+
+### 2.2.1 Passenger_count/ trip_count vs vendors
+
+In this part, we compare the number of taxis owned by each vendor and the distribution of *passenger count*, and we also take into account of the total number of trips provided by each vendor when doing the comparison. We find:
+
+* Vendor2 provided more trips compared to vendor1, which can be resulted from larger quantity of taxis owned by verder2.
+
+* There are a few trips with zero, or seven to nine passengers but they are a rare exception.
+
+* The vast majority of rides had only a single passenger, with two passengers being the (distant) second most popular option. Vendor 1 have more trips with 1 passenger than vendor2. And we guess most of the trips with one passenger are relatively short in distance and thus the majority of trips taken by vendor1 might be within the manhattan area.
+
+* Towards larger passenger numbers we are seeing a smooth decline through 3 to 4, until the larger crowds (and larger cars) give us another peak at 5 to 6 passengers.
+
+```{r}
+p3 = train %>%
+  plot_ly(x = ~passenger_count, split=~vendor_id) %>%
+  add_histogram(name = "vendor") %>%
+  layout(title = 'passenger_count of two vendors',
+         xaxis = list(ticklen = 8,tickwidth = 1,dtick = 1))
+
+p3_2 = train %>%
+  plot_ly(x = ~vendor_id, split = ~vendor_id) %>%
+  add_histogram(name = "vendor")  %>%
+  layout(title = 'trip count of two vendors',
+         xaxis = list(ticklen = 2,
+  tickwidth = 1,dtick = 1))
+
+
+subplot(p3,p3_2)
+
+tbl1 = train %>% 
+  filter(passenger_count == 0 | passenger_count >6)
+
+```
+
+On this map, we draw the pickup locations of trips provided by the two vendors separatedly, and differentiate the trips with single passenger from other trips. To assit in plotting, we create a group variable as below.
+
+Group          | Description
+-------------- | ---------------------------------------
+1              | vendor 1, passenger_count = 1
+2              | vendor 2, passenger_count = 1
+3              | vendor 1, passenger_count != 1
+4              | vendor 2, passenger_count != 1
+
+Plotly allow us to isolate sets of points by clicking on the legend, and thus we can see the comparison more clearly.
+
+* Generally, the two vendors do not have clear pick-up location preferences.
+
+* It looks like the trips with 1 passenger are not limilted within or around Manhattan, and thus there is no clear association between the size of passengers with trip distance. Also, taxis of vender 1 are more likely to take 1 passager to travel outsiede of Manhattan area compared to taxis of vendor 2.
+
+```{r}
+foo_p =foo  %>%
+  mutate(psg = ifelse(passenger_count == 1,0,2))
+
+foo_p %>%
+  plot_mapbox(mode = 'scattermapbox') %>%
+  add_markers(y = ~pickup_latitude, x = ~pickup_longitude ,split = ~psg+vendor_id, alpha = 0.5, text=~vendor_id) %>%
+  add_trace(split = 1, 'vendor 1, psg = 1') %>%
+  layout(mapbox = list(style = 'light',
+                       zoom = 9,
+                       center = list(lat = ~median(pickup_latitude),
+                                     lon = ~median(pickup_longitude)),
+                       title = 'the pick_up location of the two vendors'))
+
+  
+```
+
+### 2.2.2 Passenger_count vs trip_duration
+
+To further visualize the relationship between passenger_count and trip_duration, we drew the following graph. The trip_duration on y-axis is on logarithmic scale.
+
+* It can be shown from this plot that trips with 0 passenger take shorter time, and trip duration does not vary much with number of passangers from 1 to 6, particularly for vendor 2.
+
+* Vendor 1 has all of the trips beyond 24 hours with passenger of 1~3 $\log{(24 * 3600)} = 4.936514$, whereas vendor 2 has the kind of trips with 1~6 passengers and many more trips that approach the 24-hour limit. Also, vendor 1 have more suspicious records.
+
+```{r}
+p9 = train %>%
+  group_by(passenger_count) %>%
+  filter(vendor_id==1) %>%
+  plot_ly(type = 'box') %>%
+  add_boxplot(x=~passenger_count, y=~log10(trip_duration),boxpoints = FALSE,name = 'vendor 1')
+
+p10 = train %>%
+  group_by(passenger_count) %>%
+  filter(vendor_id==2) %>%
+  plot_ly(type = 'box') %>%
+  add_boxplot(x=~passenger_count, y=~log10(trip_duration),boxpoints = FALSE,name = 'vendor 2')
+
+
+subplot(p9,p10, nrows = 1, shareY = T) %>%
+  layout(title = 'passenger_count vs trip_duration')
+
+```
+
+We also take store_and_fwd_flag into account. To see if it affects trip_duration. We find that there is no overwhelming differences between the stored and non-stored trips. The median of stored ones might be slightly longer, though, and don’t include any of the suspiciously long trips.
+
+```{r}
+p11 = train %>%
+  group_by(passenger_count) %>%
+  filter(store_and_fwd_flag=='Y') %>%
+  plot_ly(type = 'box') %>%
+  add_boxplot(x=~passenger_count, y=~log10(trip_duration),boxpoints = FALSE,name = 'Y')
+
+p12 = train %>%
+  group_by(passenger_count) %>%
+  filter(store_and_fwd_flag=='N') %>%
+  plot_ly(type = 'box') %>%
+  add_boxplot(x=~passenger_count, y=~log10(trip_duration),boxpoints = FALSE,name = 'N')
+
+
+subplot(p11,p12, nrows = 1, shareY = T) %>%
+  layout(title = 'store_and_fwd_flag impact')
+
+
+```
+
+### 2.2.3 Pick-up date/time vs trip duration
+
+Here we look the count of trips on day of week and hours in a day. We find:
+
+* Generally, the count of pick up tend to increase from Monday to Sunday, and from 6 am to 15 pm. The number of trips peaks at 18 pm, when it is very likely to come across traffic jam.
+
+* vendor 2 take more trips than vendor 1 in each day of week, and this might be explained by vendor 2 have more taxis than vendor 1. And also, this can be related with other factors such as prices, service and so forth.
+
+* Interestingly, at 5 am in the morning, vendor 1 have has more trips than vendor 2.
+
+```{r}
+color =  terrain.colors(2, alpha = 1)
+
+p4 = train %>%
+  mutate(day_of_week = wday(pickup_datetime)) %>%
+  plot_ly(x = ~day_of_week, split=~vendor_id) %>%
+  add_histogram(name = "vendor") %>%
+  layout(title = 'pick-up day of week')
+
+p5 = train %>%
+  mutate(hour_of_day = hour(pickup_datetime)) %>%
+  plot_ly(x = ~hour_of_day, split=~vendor_id) %>%
+  add_histogram(name = "vendor") %>%
+  layout(title = 'pick-up hour in a day')
+
+subplot(p4,p5, nrows = 2,titleX = T)
+```
+
+To look at if the variation of days in a week and hours in a daily affect the average trip duration, we draw the following plots. We find:
+
+* There is indeed a similar pattern as for the business of the day of the week for the two vendors. Vendor 2, the one with the more frequent trips, also has consistently higher trip durations than vendor 1. **It will be worth adding the vendor_id feature to a model to test its predictive importance.**
+
+* Over the course of a typical day we find a peak in the early afternoon and dips around 5-6am and 8pm. **The weekday and hour of a trip appear to be important features for predicting its duration and should be included in a successful model.**
+
+
+```{r}
+#pickup date/time vs trip_duration
+p7= train %>%
+  mutate(day_of_week = wday(pickup_datetime)) %>%
+  group_by(day_of_week, vendor_id) %>%
+  summarise(mean_duration = mean(trip_duration)) %>%
+  plot_ly(x = ~day_of_week, y=~mean_duration, split=~vendor_id,mode = 'lines')
+
+p8 = train %>%
+  mutate(hour_of_day = hour(pickup_datetime)) %>%
+  group_by(hour_of_day, vendor_id) %>%
+  summarise(mean_duration = mean(trip_duration)) %>%
+  plot_ly(x = ~hour_of_day, y=~mean_duration, split=~vendor_id,mode = 'lines')
+
+subplot(p7,p8,titleX = T, shareY = T)
+```
+
+
+### 2.3.4 Correlation Plot
+
+We include a correlation plot to see the overral correlations between each pair of variable, and find that 
+
+* the time and location of pick up are highly correlated with those of drop off.
+
+* passenger_count is slightly associated with vendor_id, and that can be resulted from vendor 2 have larger size of car.
+
+```{r}
+
+train_s = train %>%
+  mutate(phour = hour(pickup_datetime),
+         dhour = hour(dropoff_datetime),
+         pday = wday(pickup_datetime),
+         dday = wday(dropoff_datetime),
+         flag = ifelse(store_and_fwd_flag == 'Y',1,0)) %>%
+  select(-id, -pickup_datetime, -dropoff_datetime, -store_and_fwd_flag)
+
+corrplot::corrplot(cor(train_s))
+
+
+```
+
+
+## 3. Feature Engineering
+
+## 3.1 Direct Distance
+
+From the coordinates of the pickup and dropoff points we can calculate the direct distance (as the crow flies) between the two points, and compare it to our trip_durations. Since taxis aren’t crows (in most practical scenarios), these values correspond to the minimum possible travel distance.
+
+This method gives us the shortest distance between two points on a spherical earth. For the purpose of this localised analysis we choose to ignore ellipsoidal distortion of the earth’s shape. We find:
+
+* The distance generally rises with increasing trip_duration
+
+* Here, the 24-hour trips look even more suspicious and are even more likely to be artefacts in the data.
+
+* In addition, there are number of trips with very short distances, down to 1 metre, but with a large range of apparent trip_durations.
 
 ```{r}
 # compute the direct distiance between pickup and dropoff
@@ -176,13 +426,6 @@ drop_coord <- train %>%
 # compute the direct distiance between pickup and dropoff
 train$dist <- distCosine(pick_coord, drop_coord)
 
-train <- train %>%
-  mutate(speed = dist/trip_duration*3.6)
-
-
-```
-
-```{r}
 ## plot of direct distance vs trip duration
 p_dis_duration = train %>%
   sample_n(5e4) %>%
@@ -191,16 +434,73 @@ p_dis_duration = train %>%
   scale_x_log10() +
   scale_y_log10() +
   labs(x = "Direct distance [m]", y = "Trip duration [s]") +
-  ggtitle('plot of direct distance vs trip duration') +
+  ggtitle('direct distance vs trip duration') +
   theme_bw()
 
 ggplotly(p_dis_duration)
 ```
 
+### 3.2 Analysis of Extreme value
 
+Based on the analysis above, there are some trip_duration take longer than a day. To determine whether these points make same, we locate the pick-up location and drop-off location of points with trip_duration grater than 1 day. In addition, we mark the coordinates of JFK Airport, LGA Airport, train station and bus station. 
+
+We find 2 out of 4 of the suspecting trips traveled indeed in long distance from airport to somewhere near train/bus station, while other two did not.
 
 ```{r}
-## the distribution of average speed
+day_plus_trips <- train %>%
+  filter(trip_duration > 24*3600)
+kable(day_plus_trips)
+
+p <- day_plus_trips %>%
+  plot_mapbox() %>%
+  add_trace(x = ~pickup_longitude,y =~pickup_latitude ,alpha = 0.8, name = 'pickup location') %>%
+  add_trace(x = ~dropoff_longitude,y =~dropoff_latitude ,alpha = 0.8, name = 'dropoff location') %>%
+  add_segments(group_by(foo,id),
+    x = ~pickup_longitude, xend = ~dropoff_longitude,
+    y = ~pickup_latitude, yend = ~dropoff_latitude,
+    alpha = 0.8, size = I(1), color = I("white"),hoverinfo = "text", name = 'path'
+  ) %>%
+  add_markers(x = hot_location$lon,
+                  y = hot_location$lat,
+                  text = hot_location$name,
+                  xref = "x",
+                  yref = "y",
+                  showarrow = TRUE,
+                  arrowhead = 20,
+                  arrowsize = 10,
+                  size = 0.7,
+              color = I('yellow'),
+              name = 'hot location') %>%
+  layout(mapbox = list(style = 'dark', zoom = 9,center = list(lat = 40.750580,
+                  lon = -73.998584)),
+    title = ''
+  )
+
+
+p
+```
+
+
+## 3.3 Travel Speed
+
+Distance over time is of course velocity, and by computing the average apparent velocity of our taxis we will have another diagnostic to remove bogus values. Of course, we won’t be able to use speed as a predictor for our model, since it requires knowing the travel time, but it can still be helpful in cleaning up our training data and finding other features with predictive power. 
+
+The summary of average speed of the two vendors contains extreme value. The maximum speed of vendor 2 is 9285 km/h, which is unblievable.
+```{r}
+train <- train %>%
+  mutate(speed = dist/trip_duration*3.6)
+
+speed_df = train %>%
+  group_by(vendor_id) %>%
+  summarize(min = min(speed), max = max(speed), median = median(speed))
+
+kable(speed_df)
+```
+
+This is the speed distribution:
+
+```{r}
+
 p_speed = train %>%
   filter(speed > 2 & speed < 1e2) %>%
   ggplot(aes(speed)) +
@@ -211,6 +511,7 @@ p_speed = train %>%
 ggplotly(p_speed)
 ```
 
+In order to check if the pick-up locaiton is associated with the average speed of each trip, we draw the following map with color changed by average speed. We find in general, trips start from airport travel in higher speed.
 
 ```{r}
 # the pickup location with color changing based on average speed
@@ -224,38 +525,24 @@ foo %>%
   plot_mapbox(lat = ~pickup_latitude, lon = ~pickup_longitude,
               mode = 'scattermapbox', hoverinfo='speed',text = ~speed) %>%
   add_markers(color=~speed, size= I(4), colors = colorRampPalette(c("yellow", "red"))(100)) %>%
+  
   layout(mapbox = list(style = 'light',
                        zoom = 9,
                        center = list(lat = ~median(pickup_latitude),
                                      lon = ~median(pickup_longitude))))
 ```
 
+# 4. Summary of EDA
 
+* The date and time is transformed into *day_of_week* and *hour_of_day*, and these new variables have effect on the trip duration.
 
-```{r}
-## the pick-up locations of two vendors
-foo %>%
-  plot_mapbox(lat = ~pickup_latitude, lon = ~pickup_longitude, split = ~vendor_id,
-              mode = 'scattermapbox', hoverinfo='speed',text = ~vendor_id) %>%
-  add_markers(alpha = 0.5) %>%
-  layout(mapbox = list(style = 'light',
-                      zoom = 9,
-                      center = list(lat = ~median(pickup_latitude),
-                                    lon = ~median(pickup_longitude))))
+* *Vender_id* is a important variable and need to be included in the model.
 
-## the speed comparison of two vendors
-train %>%
-  group_by(vendor_id) %>%
-  plot_ly(y = ~speed, alpha = 0.1) %>%
-  add_boxplot(x = ~vendor_id) %>%
-  layout(yaxis = list(range= c(0,9285.227)))
+* The coordinates of *pick-up location* and *drop-off location* should also be included in the model, since trips travel in long distance usually have higher volacity. In addition, the majority of the long-distance trips are between the transportation station like airport and train station. Therefore, we need to incorporate variables related with distance to these stations.
 
+* The *store_and_fwd_flag* affect the trip_duration, should be included.
 
+* The variation of *passenger_count* does not change trip_duration much, this variable might have less importance compared to others.
 
+* In order to explain some unusual change as analysed above, we may need to incorperate other relavant datasets.
 
-
-
-
-
-```
-The summary of average speed of the two vendors contains extreme value. The maximum speed of vendor 2 is 9285 km/h, which is unblievable.
