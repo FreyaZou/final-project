@@ -9,9 +9,9 @@ knitr::opts_chunk$set(echo = TRUE, warning = F,message = F)
 ```
 
 # Final Project
-
-
 ***
+
+
 ## 1 Backgroud
 The NYC Taxis are widely recognozied as icons of the city because New York city is a compact city with large population, and driving is expensive and time-consuming there. Although the public transportation is extensive and complete in NYC, the stations are fixed which may be far away from passengers' points of departure and destinations. Hence, it is convenient and economical for people to travel by taxi in NYC.
 
