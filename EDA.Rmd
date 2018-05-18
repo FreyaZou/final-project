@@ -439,14 +439,23 @@ Based on the analysis above, there are some trip_duration take longer than a day
 We find 2 out of 4 of the suspecting trips traveled indeed in long distance from airport to somewhere near train/bus station, while other two did not.
 
 ```{r}
+jfk_coord <- tibble(lon = -73.778889, lat = 40.639722, name = 'JFK airport')
+la_guardia_coord <- tibble(lon = -73.872611, lat = 40.77725, name = 'LGA airport')
+train_coord <- tibble(lon = -73.993584, lat = 40.750580, name = 'train station')
+bus_coord <- tibble(lon = -73.9903, lat = 40.7569, name= 'bus station')
+
+hot_location = data.frame(rbind(jfk_coord, la_guardia_coord, train_coord, bus_coord))
+
 day_plus_trips <- train %>%
   filter(trip_duration > 24*3600)
 kable(day_plus_trips)
 
+
+
 p <- day_plus_trips %>%
   plot_mapbox() %>%
   add_trace(x = ~pickup_longitude,y =~pickup_latitude ,alpha = 0.8, name = 'pickup location') %>%
-  add_trace(x = ~dropoff_longitude,y =~dropoff_latitude ,alpha = 0.8, name = 'dropoff location') %>%
+  add_trace(x = ~dropoff_longitude,y =~dropoff_latitude ,alpha = 0.8, name = 'dropoff location')%>%
   add_segments(group_by(foo,id),
     x = ~pickup_longitude, xend = ~dropoff_longitude,
     y = ~pickup_latitude, yend = ~dropoff_latitude,
