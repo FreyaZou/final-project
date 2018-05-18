@@ -12,7 +12,10 @@ knitr::opts_chunk$set(echo = TRUE, warning = F,message = F)
 ***
 
 
-## 1 Backgroud
+## 1 Introduction
+
+### 1.1 Background
+
 The NYC Taxis are widely recognozied as icons of the city because New York city is a compact city with large population, and driving is expensive and time-consuming there. Although the public transportation is extensive and complete in NYC, the stations are fixed which may be far away from passengers' points of departure and destinations. Hence, it is convenient and economical for people to travel by taxi in NYC.
 
 With the development of technology, people start to call taxi on mobile apps like Uber instead of calling the taxi service over phone. One of the most important reason is that customers can see the estimated trip durations and expenses instantly on the app after inputing pickup time and locations, and destinations. To improve the competance of their apps in the market, taxi companies concentrate on increasing the accuracy of estimated trip duration and expense. The trip duration is essential because expense is produced based on duration and distance, and distance between two locations on the same route is unchanged. 
@@ -21,7 +24,7 @@ As a result, we decide to choose the NYC Taxi Trip Duration competition on Kaggl
 
 As the data is published on Kaggle, there are some previous discussions and kernals on the website. We take these valuable work as references. 
 
-### 1.1 Import packages
+### 1.2 Import packages
 ```{r}
 library(data.table)
 library(ggplot2)
@@ -38,7 +41,8 @@ Sys.setenv('MAPBOX_TOKEN' = 'pk.eyJ1IjoiZmZmcmV5YSIsImEiOiJjamg1ZGFrMzIwMHc4MnZw
 ```
 
 
-### 1.2 Load data
+### 1.3 Load data
+
 The datasets are published on Kaggle by the NYC Taxi and Limousine Commission. There are 1,458,644 observations in the train dataset and 625,134 observations in the test dataset. The train dataset includes 11 variables such as id, vendor_id and so on. Two variables, dropoff_datetime and trip_duration which show up in the train dataset are withheld in the test dataset. Our goal is to predict the trip durations.
 
 ```{r}
@@ -46,7 +50,7 @@ train = fread('train_taxi.csv')
 test = fread('test_taxi.csv')
 ```
 
-### 1.3 File structure and content
+### 1.4 File structure and content
 
 The discription of the variables is as below:
 
@@ -82,7 +86,7 @@ After looking at the summary and structure of the data, we found:
 * *trip_duration* which is our target variable, has some extreme value: the min value is 1 second and the maximum value 3526282 seconds $\approx$ 4 days, which are unreliable.
 
 
-### 1.4 missing values
+### 1.5 missing values
 
 Missing value is a vital part in the prediction. If there exists missing value in the dataset, we need to properly handle the missing points in order to avoid building model on a small sample and drawing an inaccurate inference about the data. Fortunately, our datasets do not contain any missing value.
 
@@ -335,13 +339,12 @@ p4 = train %>%
   mutate(day_of_week = wday(pickup_datetime)) %>%
   plot_ly(x = ~day_of_week, split=~vendor_id) %>%
   add_histogram(name = "vendor") %>%
-  layout(title = 'pick-up day of week')
+  layout(title = 'pick-up day and time')
 
 p5 = train %>%
   mutate(hour_of_day = hour(pickup_datetime)) %>%
   plot_ly(x = ~hour_of_day, split=~vendor_id) %>%
-  add_histogram(name = "vendor") %>%
-  layout(title = 'pick-up hour in a day')
+  add_histogram(name = "vendor")
 
 subplot(p4,p5, nrows = 2,titleX = T)
 ```
@@ -359,13 +362,13 @@ p7= train %>%
   mutate(day_of_week = wday(pickup_datetime)) %>%
   group_by(day_of_week, vendor_id) %>%
   summarise(mean_duration = mean(trip_duration)) %>%
-  plot_ly(x = ~day_of_week, y=~mean_duration, split=~vendor_id,mode = 'lines')
+  plot_ly(x = ~day_of_week, y=~mean_duration, split=~vendor_id)
 
 p8 = train %>%
   mutate(hour_of_day = hour(pickup_datetime)) %>%
   group_by(hour_of_day, vendor_id) %>%
   summarise(mean_duration = mean(trip_duration)) %>%
-  plot_ly(x = ~hour_of_day, y=~mean_duration, split=~vendor_id,mode = 'lines')
+  plot_ly(x = ~hour_of_day, y=~mean_duration, split=~vendor_id)
 
 subplot(p7,p8,titleX = T, shareY = T)
 ```
@@ -435,7 +438,7 @@ ggplotly(p_dis_duration)
 
 ### 3.2 Analysis of Extreme value
 
-Based on the analysis above, there are some trip_duration take longer than a day. To determine whether these points make same, we locate the pick-up location and drop-off location of points with trip_duration grater than 1 day. In addition, we mark the coordinates of JFK Airport, LGA Airport, train station and bus station. 
+Based on the analysis above, there are some trip_duration take longer than a day. To determine whether these points make same, we locate the pick-up location and drop-off location of points with trip_duration grater than 1 day. In addition, we highlight the coordinates of JFK Airport, LGA Airport, train station and bus station. 
 
 We find 2 out of 4 of the suspecting trips traveled indeed in long distance from airport to somewhere near train/bus station, while other two did not.
 
@@ -539,9 +542,9 @@ foo %>%
 
 ## 4. Summary of EDA
 
-* The date and time is transformed into *day_of_week* and *hour_of_day*, and these new variables have effect on the trip duration.
+* The date and time is transformed into *day_of_week* and *hour_of_day*, and these new variables have effect on the trip duration. Since pick-up time and day are highly associated with drop-off time, we might consider drop one pair.
 
-* *Vender_id* is a important variable and need to be included in the model.
+* *Vender_id* is a important variable to be included in the model.
 
 * The coordinates of *pick-up location* and *drop-off location* should also be included in the model, since trips travel in long distance usually have higher volacity. In addition, the majority of the long-distance trips are between the transportation station like airport and train station. Therefore, we need to incorporate variables related with distance to these stations.
 
