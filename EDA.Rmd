@@ -1,19 +1,25 @@
 ---
 title: "EDA"
-author: "Fuyu"
 date: "5/14/2018"
 output: html_document
 ---
 
 ```{r setup, include=FALSE, echo=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = F,message = F)
 ```
 
 # Final Project
 
 
 ***
-## 1 Introduction
+## 1 Backgroud
+The NYC Taxis are widely recognozied as icons of the city because New York city is a compact city with large population, and driving is expensive and time-consuming there. Although the public transportation is extensive and complete in NYC, the stations are fixed which may be far away from passengers' points of departure and destinations. Hence, it is convenient and economical for people to travel by taxi in NYC.
+
+With the development of technology, people start to call taxi on mobile apps like Uber instead of calling the taxi service over phone. One of the most important reason is that customers can see the estimated trip durations and expenses instantly on the app after inputing pickup time and locations, and destinations. To improve the competance of their apps in the market, taxi companies concentrate on increasing the accuracy of estimated trip duration and expense. The trip duration is essential because expense is produced based on duration and distance, and distance between two locations on the same route is unchanged. 
+
+As a result, we decide to choose the NYC Taxi Trip Duration competition on Kaggle as our final project because the data is from the real world, and the predictions are useful and meaningful. 
+
+As the data is published on Kaggle, there are some previous discussions and kernals on the website. We take these valuable work as references. 
 
 The NYC Taxis are widely recognozied as icons of the city because New York city is a compact city with large population, and driving is expensive and time-consuming there. Although the public transportation is extensive and complete in NYC, the stations are fixed which may be far away from passengers' points of departure and destinations. Hence, it is convenient and economical for people to travel by taxi in NYC.
 
@@ -36,10 +42,15 @@ library(knitr)
 ```
 
 
+<<<<<<< HEAD
 ### 1.2 Load data
 The datasets are published on Kaggle by the NYC Taxi and Limousine Commission. There are 1,458,644 observations in the train dataset and 625,134 observations in the test dataset. The train dataset includes 11 variables such as id, vendor_id and so on. Two variables, dropoff_datetime and trip_duration which show up in the train dataset are withheld in the test dataset. Our goal is to predict the trip durations.
 
 
+=======
+## 1.2 Load data
+The datasets are published on Kaggle by the NYC Taxi and Limousine Commission. There are 1,458,644 observations in the train dataset and 625,134 observations in the test dataset. The train dataset includes 11 variables such as id, vendor_id and so on. Two variables, dropoff_datetime and trip_duration which show up in the train dataset are withheld in the test dataset. Our goal is to predict the trip durations of the test dataset.
+>>>>>>> c6afd886cb8f8f5c4d1224046fc1aef80ede72b5
 ```{r}
 train = fread('train_taxi.csv')
 test = fread('test_taxi.csv')
@@ -74,11 +85,23 @@ str(test)
 
 After looking at the summary and structure of the data, we found:
 
+<<<<<<< HEAD
 * *vender_id* only takes value 1 and 2, we assume it represents two taxi company.
 * *pickup_datetime* and *dropoff_datetime* are both the combination of date and time, which need to be reformated into sperate variables
 * *pickup_latitude* and *dropoff_latitude* are not restricted in the New York border (latitude: 40.3371 ~ 41.05555, longitute: -74.4640~-73.4944) as well as *pickup_longitude* and *dropoff_longitude* 
 * *store_and_fwd_flag* takes two character as 'N' or 'Y'
 * *trip_duration* which is our target variable, has some extreme value: the min value is 1 second and the maximum value 3526282 seconds $\approx$ 4 days, which are unreliable.
+=======
+*vender_id* only takes value 1 and 2, we assume it represents two taxi company. For example, Yellow Cab and Liberty Taxi could be the two venders.
+
+*pickup_datetime* and *dropoff_datetime* are both the combination of date and time, which need to be reformated into seperate variables so that we can explore the data on the basis of weekdays.
+
+*pickup_latitude* and *dropoff_latitude* indicate the accurate locations of on the map, which are not restricted in the New York border (latitude: 40.3371 ~ 41.05555, longitute: -74.4640~-73.4944) as well as *pickup_longitude* and *dropoff_longitude* 
+
+*store_and_fwd_flag*  indicates whether the trip record was held in vehicle memory before sending to the vendor because the vehicle did not have a connection to the server. It takes two character as 'N' or 'Y'. Y means the trip is stored and forwarded, and N means the trip is not not stored and forwarded.
+
+*trip_duration* is our response variable and its unit is second. We can get the trip_duration by calculating the difference between dropoff_datetime and pickup_datetime. From the descriptive statistics, we find that it has some extreme values: the min value is 1 second and the maximum value is 3526282 seconds approximately 4 days, which are unbelievable. As a result, we need to consider the effects of outliers and influence points.
+>>>>>>> c6afd886cb8f8f5c4d1224046fc1aef80ede72b5
 
 ## 1.4 missing values
 
@@ -97,26 +120,19 @@ In this section we will begin by having a look at the distributions of the indiv
 
 We start with a map of the pick-up locations of the taxis. The density of the green color shows the frequency of the pick-up coordinates. In this map you can zoom and pan through the pickup locations. In addition, we marked the coordinates of 
 
-It is clealy shown on the plot that most pick-up coordinates are whithin Manhattan area. Another two notable hot-spots are LGA and JFK airport towards the south-east of the city.
+It is clealy shown on the plot that most pick-up coordinates are whithin Manhattan area. Another two notable hot-spots are LGA and JFK airport towards the south-east of the city. If we plot all the points on blank canvas, we can see a rough map of Manhattan area, which suggests the data is comprehensive, meaningful, and applicable.
 ```{r}
+Sys.setenv('MAPBOX_TOKEN'="pk.eyJ1IjoibGlzaGF3IiwiYSI6ImNqaGJpdG90MzAyYjYzMG82ODhwa3o2YjEifQ.PUvt23cAai97qrBbLm7m5g")
 set.seed(1234)
 ## select a sample of 8000
 foo <- sample_n(train, 8e3)
 
-fk_coord <- data.frame(lon = -73.778889, lat = 40.639722, name = 'JFK Airport')
-la_guardia_coord <- data.frame(lon = -73.872611, lat = 40.77725,name = 'LGA Airport')
-train_coord <- data.frame(lon = -73.993584, lat = 40.750580, name = 'train station')
-bus_coord <- data.frame(lon = -73.9903, lat = 40.7569,name = 'bus station')
-
 hot_location = data.frame(rbind(fk_coord,la_guardia_coord,train_coord,bus_coord))
-
-Sys.setenv('MAPBOX_TOKEN' = 'pk.eyJ1IjoiZmZmcmV5YSIsImEiOiJjamg1ZGFrMzIwMHc4MnZwbGU0bDNnaHBlIn0.DFNaPWfAO2wa9wZUNfzLYQ')
 
 foo %>%
   plot_mapbox(lat = ~pickup_latitude, lon = ~pickup_longitude,
               mode = 'scattermapbox', hoverinfo='speed') %>%
   add_markers(alpha = 0.3, size= I(4), color = I('#32CD32')) %>%
-  #add_markers(lat = ~hot_location$lat, lon=~hot_location$lon, text = ~hot_location$name) %>%
   layout(mapbox = list(style = 'light',
                        zoom = 9,
                        center = list(lat = ~median(pickup_latitude),
@@ -485,16 +501,19 @@ p
 
 Distance over time is of course velocity, and by computing the average apparent velocity of our taxis we will have another diagnostic to remove bogus values. Of course, we won’t be able to use speed as a predictor for our model, since it requires knowing the travel time, but it can still be helpful in cleaning up our training data and finding other features with predictive power. 
 
-The summary of average speed of the two vendors contains extreme value. The maximum speed of vendor 2 is 9285 km/h, which is unblievable.
+The speed we calculted contains many 0, which can be due to the distance is 0. On the other hand, the largest speed is as great as 9285 km/h, which is highly unreliable. In the following steps, we need to exclude these extreme value in ordre to see the general patterns.
+
 ```{r}
 train <- train %>%
   mutate(speed = dist/trip_duration*3.6)
 
 speed_df = train %>%
+  select(vendor_id, speed) %>%
   group_by(vendor_id) %>%
-  summarize(min = min(speed), max = max(speed), median = median(speed))
+  arrange(speed)
 
-kable(speed_df)
+kable(head(speed_df))
+kable(tail(speed_df))
 ```
 
 This is the speed distribution:
@@ -511,7 +530,7 @@ p_speed = train %>%
 ggplotly(p_speed)
 ```
 
-In order to check if the pick-up locaiton is associated with the average speed of each trip, we draw the following map with color changed by average speed. We find in general, trips start from airport travel in higher speed.
+In order to check if the pick-up locaiton is associated with the average speed of each trip, we draw the following map with color changed by average speed. We find in general, trips start from/ end at airport travel in higher speed.
 
 ```{r}
 # the pickup location with color changing based on average speed
