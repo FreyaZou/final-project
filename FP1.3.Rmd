@@ -677,4 +677,21 @@ RMSE(pred.t,y.test) # 0.3381741
 ```
 
 
+```{r}
+# Use the entire training dataset
+xgb <- xgboost(data = x, label = y, nrounds = 150,eta=0.3, gamma=5, max_depth=7, subsample=0.7, colsample_bytree=0.7, objective = "reg:linear", eval_metric = "rmse",print_every_n = 25)
+
+x.pred<- Ftrain%>%
+  filter(dset=="test")%>%
+  dplyr::select(vendor_id, passenger_count, dist, pickup_longitude,
+         pickup_latitude,dropoff_longitude,dropoff_latitude,
+         month,wday,hour,jfk_trip,lg_trip,bearing,
+         freq1,freq2,pinteract,dinteract,interact3, interact4, t_trip, b_trip,
+         avg_temp,has_snow,blizzard,
+         total_travel_time, total_distance) 
+x.pred <- model.matrix(~.,data = x.pred)[,-1]
+
+pred.xgb <- predict(xgb,x.pred)
+pred.trip.duration <- exp(pred.xgb) -1
+```
 
