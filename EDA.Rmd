@@ -31,6 +31,7 @@ library(plotly)
 library(tidyverse)
 library(geosphere)
 library(knitr)
+library(corrplot)
 
 ## set environment in order to generate map_box plot
 Sys.setenv('MAPBOX_TOKEN' = 'pk.eyJ1IjoiZmZmcmV5YSIsImEiOiJjamg1ZGFrMzIwMHc4MnZwbGU0bDNnaHBlIn0.DFNaPWfAO2wa9wZUNfzLYQ')
